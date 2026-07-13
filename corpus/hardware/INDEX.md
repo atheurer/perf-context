@@ -4,4 +4,5 @@
 | id | abstract | tokens | type |
 |---|---|---|---|
 | `cpu-frequency-turbo` | CPU cores do not run at a fixed frequency. Turbo boost raises frequency above the base rate when thermal budget allows; AVX-512 workloads on Intel force a frequency reduction across all cores; deep C-states add exit l... | 470 | concept |
+| `false-sharing-coherence` | False sharing occurs when two threads on different CPUs write to different variables that happen to occupy the same 64-byte cache line. Each write invalidates the line on the other CPU, causing MESI protocol traffic a... | 450 | concept |
 | `numa-remote-memory` | On multi-socket servers, memory attached to a different CPU socket (remote NUMA node) has 1.5–2× higher latency and lower bandwidth than local memory. A process whose threads run on socket 0 but whose memory was alloc... | 480 | concept |
