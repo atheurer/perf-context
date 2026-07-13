@@ -4,3 +4,4 @@
 | id | abstract | tokens | type |
 |---|---|---|---|
 | `qdisc-ring-drops` | Network packet drops occur at several distinct points: the NIC ring buffer (driver-level), the qdisc (kernel transmit queue), and the socket receive buffer. Each has its own counter and its own fix. Identifying which ... | 510 | tool |
+| `tcp-incast` | TCP incast occurs when many servers respond simultaneously to one receiver, causing switch buffer overflow, packet drops, and TCP retransmit timeout (RTO) delays of 200ms or more. Throughput collapses even though the ... | 450 | concept |
