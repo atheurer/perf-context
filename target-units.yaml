@@ -1,0 +1,1067 @@
+# Tranche-0 target-unit manifest for perf-context corpus
+#
+# Purpose: demand-first fill of SYMPTOMS.md — enumerate the ~50 units that make
+# the review agent useful before harvesting broadly. Feed each entry to
+# agents/distiller-prompt.md after raw material is in the annex.
+#
+# Fields per unit:
+#   id            unique kebab-case id; becomes the corpus filename stem
+#   title         human title
+#   domain        corpus/<domain>/ directory (methodology|observability|hardware|kernel|runtimes|distributed|gpu-ml)
+#   corpus_path   target file path relative to repo root
+#   symptom_tags  tags from SYMPTOMS.md vocabulary that this unit serves
+#   source_ids    registry/sources.yaml source ids to distill from
+#   source_paths  optional: paths within the source relevant to this unit
+#   lwn_urls      curated LWN article URLs (free archive, >30 days old)
+#   applicability kernel/hardware/software constraints
+#   notes_for_distiller  guidance for the distiller agent for this unit specifically
+#
+# RHEL backport caveat (apply to all kernel units with kernel: "upstream >=X"):
+#   RHEL kernels are heavily backported. Upstream version numbers are approximate.
+#   Distiller MUST write: "upstream >=X; RHEL10 (6.12-based): yes; RHEL9 (5.14-based):
+#   [no|yes if backported] — verify with `uname -r` + feature probe (see notes)."
+#   Never trust upstream version alone for RHEL applicability.
+
+units:
+
+  # ── Kernel domain ──────────────────────────────────────────────────────────
+  # Highest priority: these explain RHEL9→RHEL10 behavioral differences directly.
+
+  - id: eevdf-vs-cfs
+    title: "EEVDF scheduler vs CFS: behavior, applicability, and RHEL version split"
+    domain: kernel
+    corpus_path: corpus/kernel/eevdf-vs-cfs.md
+    symptom_tags: [high-sys-cpu, run-queue-long, low-cpu-low-throughput]
+    source_ids: [lwn, kernel-docs]
+    source_paths:
+      kernel-docs: [Documentation/scheduler/sched-eevdf.rst, Documentation/scheduler/sched-design-CFS.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/925371/   # "An EEVDF CPU scheduler for Linux" (2023-02)
+      - https://lwn.net/Articles/969349/   # EEVDF in 6.6, latency behavior notes
+      - https://lwn.net/Articles/830donnerstag/  # CFS bandwidth throttling background
+    applicability:
+      kernel: "upstream >=6.6 (EEVDF merged); RHEL10 (kernel-6.12-based): yes; RHEL9 (kernel-5.14-based): CFS only — EEVDF not backported to RHEL9; verify with `uname -r` and `cat /sys/kernel/debug/sched/features 2>/dev/null | grep -i eevdf`"
+      hardware: x86_64
+      software: any
+    notes_for_distiller: |
+      THE primary unit for explaining RHEL9→RHEL10 throughput/latency differences.
+      Cover: (1) how EEVDF differs from CFS mechanically — vruntime/lag accounting vs
+      weighted fair share, deadline assignment, "eligible and deadline" scheduling;
+      (2) observable behavioral differences: wakeup latency distribution, preemption
+      frequency, fairness under mixed workload classes; (3) which metric deltas are
+      diagnostic: perf sched latency, run-queue length distribution (mpstat run-queue
+      depth), context switch rates; (4) known early-EEVDF regressions and whether they
+      are fixed in 6.12; (5) the RHEL backport caveat. This unit must end with
+      concrete discriminating measurements: what `perf sched timehist`, `sar -q`, and
+      `perf stat -e context-switches` show differently between CFS and EEVDF kernels.
+
+  - id: mglru-page-reclaim
+    title: "MGLRU: multi-generational LRU page reclaim (RHEL10 default)"
+    domain: kernel
+    corpus_path: corpus/kernel/mglru-page-reclaim.md
+    symptom_tags: [memory-pressure, swap-thrash, throughput-collapse]
+    source_ids: [lwn, kernel-docs]
+    source_paths:
+      kernel-docs: [Documentation/mm/multigen_lru.rst, Documentation/admin-guide/mm/multigen_lru.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/851817/   # "Multigenerational LRU: the next steps" (2021-07)
+      - https://lwn.net/Articles/881876/   # MGLRU merged into mainline (2022-12)
+      - https://lwn.net/Articles/914232/   # MGLRU performance results discussion
+    applicability:
+      kernel: "upstream >=6.1 (MGLRU merged); RHEL10 (kernel-6.12-based): yes, enabled by default; RHEL9: backported in RHEL9.3+ (kernel >=5.14.0-362), disabled by default — enable with `echo y > /sys/kernel/mm/lru_gen/enabled`; verify with `cat /sys/kernel/mm/lru_gen/enabled`"
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) problem with 2-list active/inactive LRU — why it ages pages poorly
+      under mixed access patterns; (2) MGLRU mechanics: generations, aging vs eviction,
+      how it tracks access frequency with minimal overhead; (3) workload classes that
+      improve vs regress (streaming I/O, large working sets, mixed cold/hot pages);
+      (4) how to detect MGLRU influence: compare `sar -B` (pgscank, pgsteal) and
+      `/proc/vmstat` (workingset_activate, workingset_refault) between RHEL9 and RHEL10;
+      (5) RHEL9 backport status and how to enable/disable for A/B comparison.
+
+  - id: thp-transparent-hugepages
+    title: "Transparent Huge Pages: defaults, overhead, and RHEL version changes"
+    domain: kernel
+    corpus_path: corpus/kernel/thp-transparent-hugepages.md
+    symptom_tags: [memory-pressure, low-ipc, high-sys-cpu]
+    source_ids: [kernel-docs, lwn, rhel-tuning-guides]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/mm/transhuge.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/423584/   # THP introduction
+      - https://lwn.net/Articles/787629/   # THP: "never" as default discussion
+    applicability:
+      kernel: "any; THP default changed between distro releases — verify `cat /sys/kernel/mm/transparent_hugepage/enabled`"
+      hardware: x86_64 (2M pages); aarch64 (2M pages)
+      software: any
+    notes_for_distiller: |
+      Cover: (1) THP mechanics: collapse, promote, split; (2) default mode differences:
+      RHEL9 default=always vs RHEL10 madvise changes — verify current defaults;
+      (3) khugepaged overhead: CPU cycles for collapse, stall during split;
+      (4) workloads that benefit (large contiguous allocations) vs regress (many small
+      short-lived allocations, GC-heavy runtimes); (5) how to detect THP activity:
+      `/proc/vmstat` thp_* counters, `sar -B`; (6) disabling for controlled comparison:
+      `echo madvise > /sys/kernel/mm/transparent_hugepage/enabled`.
+
+  - id: tuned-profiles-rhel
+    title: "tuned profiles in RHEL9 vs RHEL10: which sysctls change and why"
+    domain: kernel
+    corpus_path: corpus/kernel/tuned-profiles-rhel.md
+    symptom_tags: [high-sys-cpu, low-cpu-low-throughput, throughput-collapse]
+    source_ids: [tuned, rhel-tuning-guides]
+    source_paths:
+      tuned: [profiles/throughput-performance/, profiles/network-throughput/, profiles/latency-performance/, profiles/realtime/]
+    applicability:
+      kernel: "RHEL9 / RHEL10 (profile availability and defaults differ)"
+      hardware: x86_64
+      software: tuned >=2.x
+    notes_for_distiller: |
+      Cover: (1) tuned profile hierarchy: which profiles exist in RHEL9 vs RHEL10,
+      which is default in each; (2) key sysctls set by throughput-performance and
+      network-throughput: vm.dirty_ratio, net.core.* rmem/wmem, CPU governor,
+      kernel.sched_* parameters; (3) RHEL10 profile additions/removals; (4) how
+      profile differences can explain benchmark result changes without code changes;
+      (5) verification: `tuned-adm active`, `tuned-adm profile_info`, comparing
+      /etc/tuned/ between releases. Concrete sysctl diff tables are high-value here.
+
+  - id: cgroup-cpu-throttling
+    title: "cgroup v2 CPU bandwidth throttling: detection and diagnosis"
+    domain: kernel
+    corpus_path: corpus/kernel/cgroup-cpu-throttling.md
+    symptom_tags: [cgroup-throttled, high-sys-cpu, low-cpu-low-throughput]
+    source_ids: [kernel-docs, lwn, rhel-tuning-guides]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/cgroup-v2.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/844976/   # "Fixing bandwidth throttling in cgroup v2" (2021-02)
+      - https://lwn.net/Articles/398317/   # CFS bandwidth control original
+    applicability:
+      kernel: ">=4.15 (cgroup v2 CPU controller stable); RHEL9+: cgroup v2 default"
+      hardware: any
+      software: any container/k8s workload with CPU limits
+    notes_for_distiller: |
+      Cover: (1) CFS bandwidth controller mechanics: cpu.max (quota/period), how
+      throttling is triggered; (2) detection tools: `cat cpu.stat | grep nr_throttled`,
+      PSI (cpu.pressure), `sar -u` showing low %usr on busy app; (3) the "1000 CPUs
+      but throttled" failure mode — app appears to have headroom but cpu.stat shows
+      throttling; (4) cgroup hierarchy: where quota applies, inheritance; (5) common
+      misconfiguration patterns in k8s (requests vs limits, burst behavior);
+      (6) the RHEL9→RHEL10 cgroup v1→v2 migration impact on throttling semantics.
+
+  - id: cgroup-memory-high-reclaim
+    title: "cgroup v2 memory.high: reclaim pressure, PSI, and latency"
+    domain: kernel
+    corpus_path: corpus/kernel/cgroup-memory-high-reclaim.md
+    symptom_tags: [cgroup-throttled, memory-pressure, p99-tail]
+    source_ids: [kernel-docs, lwn]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/cgroup-v2.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/932759/   # memory.high behavior discussion
+    applicability:
+      kernel: ">=5.2 (memory.high throttling added); RHEL9+"
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) memory.high vs memory.max: reclaim-with-throttle vs OOM kill;
+      (2) reclaim mechanics under memory.high: how the kernel slows the cgroup;
+      (3) PSI (Pressure Stall Information) as the diagnostic: /proc/pressure/memory
+      and per-cgroup memory.pressure; reading avg10/avg60/avg300; (4) how to
+      distinguish memory throttling from CPU throttling from application slowness;
+      (5) concrete reading: `cat /sys/fs/cgroup/.../memory.stat` fields to watch
+      (pgfault, pgmajfault, workingset_refault).
+
+  - id: irq-softirq-napi
+    title: "IRQ and softirq processing: per-CPU budgets, NAPI, and saturation"
+    domain: kernel
+    corpus_path: corpus/kernel/irq-softirq-napi.md
+    symptom_tags: [irq-storm, softirq-saturation, high-sys-cpu]
+    source_ids: [kernel-docs, lwn, rhel-tuning-guides]
+    source_paths:
+      kernel-docs: [Documentation/networking/napi.rst, Documentation/core-api/irq/]
+    lwn_urls:
+      - https://lwn.net/Articles/687617/   # NAPI internals overview
+      - https://lwn.net/Articles/362244/   # softirq budget and NET_RX
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) interrupt → hardirq → softirq → ksoftirqd execution model;
+      (2) NAPI polling: budget (netdev_budget=300), when it fires, weight per device;
+      (3) per-CPU softirq saturation: detection via `mpstat -P ALL` (%soft column),
+      `/proc/softirqs` deltas (NET_RX, NET_TX), `watch -n1 cat /proc/softirqs`;
+      (4) when one CPU is pegged: IRQ affinity (smp_affinity), /proc/interrupts
+      imbalance, RPS/RFS migration; (5) ksoftirqd: when it runs, what it means
+      for latency; (6) sysctl levers: net.core.netdev_budget, net.core.busy_read.
+
+  - id: rps-rfs-xps-steering
+    title: "Network IRQ steering: RPS, RFS, XPS configuration"
+    domain: kernel
+    corpus_path: corpus/kernel/rps-rfs-xps-steering.md
+    symptom_tags: [irq-storm, softirq-saturation, packet-drops]
+    source_ids: [kernel-docs, rhel-tuning-guides]
+    source_paths:
+      kernel-docs: [Documentation/networking/scaling.rst]
+    applicability:
+      kernel: ">=2.6.35 (RPS); >=2.6.35 (RFS); >=3.3 (XPS)"
+      hardware: multi-queue NIC preferred; single-queue benefits from RPS
+      software: any
+    notes_for_distiller: |
+      Cover: (1) why single-queue NICs saturate one CPU; (2) RPS: software-side
+      RSS, hash → CPU mapping, /sys/class/net/<dev>/queues/rx-*/rps_cpus bitmap;
+      (3) RFS: receive flow steering — routes to the CPU that last processed the
+      socket; rps_sock_flow_entries; (4) XPS: transmit side — tx queue → CPU map;
+      (5) hardware RSS: how to check queue count (`ethtool -l`), whether HW is
+      already distributing; (6) practical config commands for RHEL; (7) how to
+      verify balance: `cat /proc/interrupts | grep <nic>` per-CPU counts.
+
+  - id: kernel-spectre-mitigations
+    title: "Spectre-class mitigation costs: retpoline, IBRS, IBPB overhead"
+    domain: kernel
+    corpus_path: corpus/kernel/kernel-spectre-mitigations.md
+    symptom_tags: [high-sys-cpu, low-ipc]
+    source_ids: [kernel-docs, lwn]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/hw-vuln/]
+    lwn_urls:
+      - https://lwn.net/Articles/741266/   # Meltdown and Spectre (2018-01)
+      - https://lwn.net/Articles/752408/   # Spectre mitigations deep dive
+      - https://lwn.net/Articles/820086/   # "The ongoing Spectre mitigation saga" (eIBRS)
+      - https://lwn.net/Articles/878826/   # Retbleed and mitigation overhead
+    applicability:
+      kernel: "all; mitigation defaults and overhead vary significantly by kernel generation and CPU microcode"
+      hardware: "x86_64 Intel/AMD; overhead varies by uarch — SKX vs ICX vs SPR vs Genoa"
+      software: syscall-heavy workloads most affected
+    notes_for_distiller: |
+      Cover: (1) what each mitigation does: retpoline (indirect branch), IBRS/eIBRS
+      (indirect branch restriction speculation), IBPB (prediction barrier), STIBP,
+      SSBD; (2) overhead profile: retpoline ~0-5% syscall-light; IBRS legacy severe
+      (up to 30% on some workloads); eIBRS much cheaper; IBPB on context switch
+      expensive; (3) how to read current mitigation status: `cat /proc/cpuinfo | grep bugs`,
+      `cat /sys/devices/system/cpu/vulnerabilities/*`; (4) RHEL9 vs RHEL10 default
+      differences (newer kernels have cheaper mitigations on newer CPUs); (5) how
+      to attribute: `perf stat -e syscalls:sys_enter_*` for syscall rate, compare
+      with mitigation off (mitigations=off boot param) in lab only.
+
+  - id: io-scheduler-block-layer
+    title: "Block layer I/O schedulers: mq-deadline, none, bfq — selection and tuning"
+    domain: kernel
+    corpus_path: corpus/kernel/io-scheduler-block-layer.md
+    symptom_tags: [iowait-high]
+    source_ids: [kernel-docs, bcc]
+    source_paths:
+      kernel-docs: [Documentation/block/]
+    applicability:
+      kernel: ">=5.0 (blk-mq stable); RHEL9+ default mq-deadline for most devices"
+      hardware: NVMe (none/mq-deadline), HDD (mq-deadline/bfq), SSD
+      software: any I/O-bound workload
+    notes_for_distiller: |
+      Cover: (1) blk-mq architecture: hardware dispatch queues, software queues;
+      (2) scheduler selection by device type: none (NVMe, direct-attached fast SSD),
+      mq-deadline (general purpose), bfq (desktop/fairness); how to check:
+      `cat /sys/block/nvme0n1/queue/scheduler`; how to change; (3) mq-deadline tuning:
+      read_expire, write_expire, fifo_batch; (4) queue depth: `iostat -x` aqu-sz
+      (average queue size) — what high vs low means; (5) biolatency (BCC) for
+      per-operation latency distribution; (6) fio as device baseline: how to run
+      a raw device benchmark to separate device from filesystem overhead.
+
+  - id: psi-pressure-stall
+    title: "Pressure Stall Information (PSI): reading CPU/memory/IO pressure metrics"
+    domain: kernel
+    corpus_path: corpus/kernel/psi-pressure-stall.md
+    symptom_tags: [cgroup-throttled, memory-pressure, iowait-high]
+    source_ids: [kernel-docs, lwn]
+    source_paths:
+      kernel-docs: [Documentation/accounting/psi.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/759781/   # PSI introduction (Facebook, 2018-10)
+      - https://lwn.net/Articles/775827/   # PSI merged into mainline
+    applicability:
+      kernel: ">=4.20 (PSI merged); RHEL9+ available; per-cgroup PSI: >=5.2"
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) what PSI measures: time fraction tasks spent stalled waiting for a
+      resource; some (at least one task stalled) vs full (all tasks stalled);
+      (2) reading /proc/pressure/{cpu,memory,io}: avg10/avg60/avg300 interpretation,
+      what values are alarming; (3) per-cgroup PSI: `cat /sys/fs/cgroup/.../cpu.pressure`;
+      (4) PSI as detection: PSI pressure > 5% avg60 is a meaningful signal;
+      (5) PSI vs utilization: PSI captures stall time (demand > supply), utilization
+      only captures busy time — a system can be 60% CPU util with 0% PSI or with 30% PSI;
+      (6) using PSI for automated threshold-based alerts.
+
+  - id: numa-balancing-kernel
+    title: "Kernel NUMA balancing: automatic migration, overhead, and disabling"
+    domain: kernel
+    corpus_path: corpus/kernel/numa-balancing-kernel.md
+    symptom_tags: [numa-remote, high-sys-cpu, p99-tail]
+    source_ids: [kernel-docs, rhel-tuning-guides]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/mm/numa_memory_policy.rst]
+    lwn_urls:
+      - https://lwn.net/Articles/709122/   # NUMA balancing improvements
+    applicability:
+      kernel: ">=3.13 (automatic NUMA balancing); RHEL9+"
+      hardware: multi-socket NUMA (2+ sockets or NUMA-split memory)
+      software: any
+    notes_for_distiller: |
+      Cover: (1) automatic NUMA balancing: NUMA faulting, page migration, periodic
+      scanning overhead; (2) when it helps vs hurts: helps for single-process with
+      poor initial placement, hurts for latency-sensitive workloads due to faulting
+      pauses; (3) detection: `numastat`, `numactl --hardware`, `sar -B` for
+      pgmigrate; (4) disabling: `echo 0 > /proc/sys/kernel/numa_balancing` or via
+      tuned; (5) manual placement: `numactl --membind` / `--cpunodebind`; (6) RHEL9
+      vs RHEL10 default: verify current default with `cat /proc/sys/kernel/numa_balancing`.
+
+  - id: futex-lock-contention
+    title: "Futex and userspace lock contention: detection with off-CPU profiling"
+    domain: kernel
+    corpus_path: corpus/kernel/futex-lock-contention.md
+    symptom_tags: [lock-contention, low-cpu-low-throughput, p99-tail]
+    source_ids: [bcc, bpftrace, lwn]
+    lwn_urls:
+      - https://lwn.net/Articles/360699/   # Futex internals
+      - https://lwn.net/Articles/479827/   # futex performance improvements
+    applicability:
+      kernel: any
+      hardware: any
+      software: any multi-threaded application
+    notes_for_distiller: |
+      Cover: (1) futex mechanics: kernel mediates only the contended case;
+      (2) detection workflow: off-CPU flame graph → look for futex_wait stacks;
+      bpftrace futex latency one-liner; `funclatency pthread_mutex_lock`;
+      (3) BCC tool: `offcputime -p <pid> -K` for kernel stacks; (4) strace
+      futex syscall counting as a quick check; (5) distinguishing lock contention
+      from I/O wait: off-CPU stack fingerprints; (6) common patterns: G-thread
+      lock, GIL in Python, Java's biased locking removal in JDK 15+.
+
+  # ── Observability domain ───────────────────────────────────────────────────
+
+  - id: use-method
+    title: "USE Method: Utilization, Saturation, Errors for systematic resource investigation"
+    domain: observability
+    corpus_path: corpus/observability/use-method.md
+    symptom_tags: [high-sys-cpu, iowait-high, memory-pressure]
+    source_ids: [gregg-site]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) the three metrics: utilization (% busy), saturation (queue/backlog),
+      errors; (2) per-resource application: CPU, memory, disk, network, bus;
+      (3) metric sources for each: which tools, which columns; (4) USE as a checklist
+      methodology — what order to check, when to stop; (5) limitations: doesn't find
+      software-side bottlenecks (lock contention, GC) directly — those require
+      work-queue model extension. Concrete tool commands for each resource class.
+
+  - id: off-cpu-analysis
+    title: "Off-CPU analysis: why tasks sleep, block, and how to profile it"
+    domain: observability
+    corpus_path: corpus/observability/off-cpu-analysis.md
+    symptom_tags: [lock-contention, iowait-high, p99-tail]
+    source_ids: [gregg-site, bcc, bpftrace]
+    applicability:
+      kernel: ">=4.9 (BPF stable for off-CPU profiling)"
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) on-CPU vs off-CPU time: CPU flame graphs miss everything tasks spend
+      sleeping; (2) offcputime (BCC): `offcputime -p <pid> 10` — kernel + user stacks
+      weighted by blocked time; (3) bpftrace equivalent; (4) flame graph interpretation:
+      width = total blocked time by that stack; (5) common signatures: I/O wait
+      (VFS read/write), lock (futex_wait), scheduler (sched_switch into sleep),
+      network (tcp_recvmsg); (6) wakeup tracing for pairing sleep with cause.
+
+  - id: flame-graph-interpretation
+    title: "CPU and off-CPU flame graph reading: interpretation and differential graphs"
+    domain: observability
+    corpus_path: corpus/observability/flame-graph-interpretation.md
+    symptom_tags: [high-sys-cpu, high-user-cpu, lock-contention]
+    source_ids: [flamegraph, gregg-site]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) axis semantics: x=population (not time order), y=call depth, width=time;
+      (2) reading CPU flame graphs: wide frames = hot code paths; (3) interpretation traps:
+      narrow stacks don't mean infrequent — sampling rate matters; (4) kernel vs user
+      frame coloring; (5) differential flame graphs: red=more, blue=less between two
+      profiles; how to generate with flamegraph.pl --negate; (6) common patterns:
+      flat top = one hot function; tall narrow = deep call chain with one hot leaf.
+
+  - id: perf-stat-record
+    title: "perf stat and perf record: PMU counter measurement and sampling"
+    domain: observability
+    corpus_path: corpus/observability/perf-stat-record.md
+    symptom_tags: [low-ipc, high-sys-cpu, high-user-cpu]
+    source_ids: [perf-wiki, kernel-docs]
+    source_paths:
+      kernel-docs: [tools/perf/Documentation/]
+    applicability:
+      kernel: ">=4.x (modern perf); requires perf_event_paranoid <= 1 or root"
+      hardware: x86_64 (Intel/AMD PMU); aarch64
+      software: any
+    notes_for_distiller: |
+      Cover: (1) `perf stat -a sleep 10` baseline: cycles, instructions, IPC, cache refs,
+      cache misses, branch misses; IPC interpretation (< 0.5 = memory-bound, > 3 = well-
+      optimized); (2) `perf record -g -F 99 -p <pid>` + `perf report`; (3) useful event
+      groups: `perf stat -e cycles,instructions,cache-misses,cache-refs,page-faults,
+      context-switches`; (4) counting syscalls: `perf stat -e syscalls:sys_enter_* ...`;
+      (5) perf_event_paranoid and capabilities; (6) avoiding PMU multiplexing errors
+      for large event sets.
+
+  - id: tma-top-down-analysis
+    title: "Top-Down Microarchitecture Analysis (TMA): identifying CPU bottleneck class"
+    domain: observability
+    corpus_path: corpus/observability/tma-top-down-analysis.md
+    symptom_tags: [low-ipc, frontend-bound, backend-bound]
+    source_ids: [yasin-tma, easyperf-book, perf-wiki]
+    applicability:
+      kernel: any
+      hardware: "x86_64 Intel (IvyBridge+); AMD Zen 3+ (partial); aarch64 ARM (Neoverse N2+)"
+      software: any
+    notes_for_distiller: |
+      Cover: (1) TMA hierarchy: Retiring (good work), Bad Speculation, Frontend Bound,
+      Backend Bound → sub-levels; (2) level-1 with perf: `perf stat -M TopdownL1`;
+      (3) toplev.py for deeper levels; (4) how to interpret: Backend Bound Memory →
+      check LLC/DRAM bandwidth; Frontend Bound DSB → icache/BTB pressure; (5) common
+      patterns: memory bandwidth-bound (Backend Bound → Memory Bound > 30%), lock
+      contention shows as Backend Bound Core; (6) RHEL-specific: perf event names
+      may differ between RHEL9/10 kernel versions.
+
+  - id: perf-c2c-false-sharing
+    title: "perf c2c: detecting cache-line false sharing and cross-CPU coherence traffic"
+    domain: observability
+    corpus_path: corpus/observability/perf-c2c-false-sharing.md
+    symptom_tags: [false-sharing, low-ipc, high-sys-cpu]
+    source_ids: [perf-wiki, gregg-site]
+    applicability:
+      kernel: ">=4.7 (c2c subcommand); RHEL8+"
+      hardware: "x86_64 Intel (PEBS required); AMD limited support"
+      software: multi-threaded applications with shared data structures
+    notes_for_distiller: |
+      Cover: (1) false sharing: two CPUs writing different variables on same cache line;
+      (2) `perf c2c record -a --all-user -- sleep 10` + `perf c2c report --stdio`;
+      (3) output: hitm% (HITM = snoop hit in modified state), identifying hot lines
+      and the load/store instructions touching them; (4) fix patterns: padding to
+      cache line boundary (__cacheline_aligned), separating hot and cold fields;
+      (5) perf c2c vs perf mem for distinguishing true from false sharing;
+      (6) NUMA coherence traffic: remote HITM vs local HITM in the report.
+
+  - id: mpstat-sar-cpu-breakdown
+    title: "mpstat/sar CPU breakdown: reading user/sys/softirq/irq/iowait correctly"
+    domain: observability
+    corpus_path: corpus/observability/mpstat-sar-cpu-breakdown.md
+    symptom_tags: [high-sys-cpu, irq-storm, softirq-saturation, iowait-high]
+    source_ids: [sysstat, gregg-site, rhel-tuning-guides]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) `mpstat -P ALL 1` output: %usr, %sys, %iowait, %irq, %soft, %idle
+      per CPU — what each means; (2) detection patterns: %soft on one CPU → IRQ
+      imbalance; %sys elevated system-wide → syscall/kernel overhead; %iowait ≠
+      disk slow (it means a runnable task is blocked on I/O, not that disk is fast);
+      (3) `sar -u 1 ALL` for all-CPU aggregate; (4) `sar -P ALL 1` for per-CPU over time;
+      (5) comparing RHEL9 vs RHEL10 %sys as a first-pass diagnostic for scheduler/
+      mitigation differences; (6) iowait interpretation trap: iowait can be 0% with
+      slow disk if the workload is synchronous-wait heavy.
+
+  - id: pidstat-context-switches
+    title: "pidstat: per-process context switches, CPU usage, and thread diagnosis"
+    domain: observability
+    corpus_path: corpus/observability/pidstat-context-switches.md
+    symptom_tags: [high-sys-cpu, lock-contention, run-queue-long]
+    source_ids: [sysstat, gregg-site]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) `pidstat -w 1` for voluntary vs involuntary context switches per
+      process; (2) interpretation: high voluntary = process blocking often (I/O, locks);
+      high involuntary = being preempted (overloaded CPU, time-slice expiry, scheduler
+      behavior change like EEVDF); (3) `pidstat -t` for per-thread breakdown;
+      (4) correlation: RHEL9→RHEL10 involuntary cswch/s change indicates scheduler
+      behavior difference; (5) `pidstat -u -d -r` combined output; (6) pairing with
+      off-CPU analysis to identify *why* voluntary switches happen.
+
+  - id: bcc-offcpu-tools
+    title: "BCC off-CPU and latency tools: offcputime, wakeuptime, funclatency"
+    domain: observability
+    corpus_path: corpus/observability/bcc-offcpu-tools.md
+    symptom_tags: [lock-contention, iowait-high, p99-tail]
+    source_ids: [bcc]
+    source_paths:
+      bcc: [tools/offcputime.py, tools/wakeuptime.py, tools/funclatency.py, tools/offcputime_example.txt, tools/funclatency_example.txt]
+    applicability:
+      kernel: ">=4.9 (BPF stable); RHEL8+ with kernel-devel"
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) offcputime: `offcputime -p <pid> -K 10` — kernel stacks, time in
+      microseconds; when to use (unexplained latency, not enough CPU usage);
+      (2) wakeuptime: pairs sleep with the waker stack — who is waking this task late;
+      (3) funclatency: `funclatency pthread_mutex_lock` for lock acquisition latency
+      distribution; (4) interpreting BCC histogram output: bucket distribution,
+      what percentile the tail is; (5) filtering by thread, by min latency;
+      (6) common failure mode: kprobes disabled in some RHEL configs — check
+      `cat /proc/sys/kernel/kptr_restrict` and debugfs mount.
+
+  - id: bpftrace-network-tools
+    title: "bpftrace for network and I/O investigation: key one-liners"
+    domain: observability
+    corpus_path: corpus/observability/bpftrace-network-tools.md
+    symptom_tags: [softirq-saturation, packet-drops, iowait-high]
+    source_ids: [bpftrace]
+    source_paths:
+      bpftrace: [tools/, docs/reference_guide.md]
+    applicability:
+      kernel: ">=4.9 (BPF); bpftrace >=0.9"
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) key bpftrace patterns: tracing tracepoints (tp:net:), kprobes (kprobe:),
+      uprobes; (2) network one-liners: TCP retransmit tracing, packet drop tracing,
+      socket recv latency; (3) disk one-liners: bio latency histogram, I/O size
+      distribution; (4) scheduler: sched:sched_switch latency distribution;
+      (5) bpftrace vs BCC: when to use each (one-liners vs complex tools);
+      (6) safety: read-only by default; no kernel modification; overhead model.
+
+  - id: biolatency-iostat
+    title: "Block I/O latency: biolatency (BCC), iostat -x, and disk diagnosis"
+    domain: observability
+    corpus_path: corpus/observability/biolatency-iostat.md
+    symptom_tags: [iowait-high]
+    source_ids: [bcc, sysstat]
+    source_paths:
+      bcc: [tools/biolatency.py, tools/biolatency_example.txt]
+    applicability:
+      kernel: ">=4.9 for BCC; sysstat any"
+      hardware: any block device
+      software: I/O-bound workloads
+    notes_for_distiller: |
+      Cover: (1) `biolatency -D` for per-disk latency histograms: what p99 means for
+      storage; (2) `iostat -x 1`: fields to focus on — aqu-sz (queue depth, >1 means
+      queued), await (total response time incl queue), r_await/w_await separately;
+      (3) the svctm column is deprecated and unreliable — ignore it; (4) saturation
+      signal: aqu-sz > 1 sustained means device is oversubscribed; (5) distinguishing
+      device slowness from queue depth mismatch: run fio baseline on raw device;
+      (6) NVMe specifics: queue depth 1024+, await << 1ms expected.
+
+  - id: perf-sched-timehist
+    title: "perf sched: scheduling latency, wakeup-to-run gaps, and timehist"
+    domain: observability
+    corpus_path: corpus/observability/perf-sched-timehist.md
+    symptom_tags: [p99-tail, run-queue-long, high-sys-cpu]
+    source_ids: [perf-wiki, kernel-docs]
+    source_paths:
+      kernel-docs: [tools/perf/Documentation/]
+    applicability:
+      kernel: any
+      hardware: any
+      software: latency-sensitive workloads
+    notes_for_distiller: |
+      Cover: (1) `perf sched record -- sleep 10` then `perf sched timehist`:
+      wait time (wakeup → run), sch delay, run time per event; (2) identifying
+      scheduler tail latency: sort by wait_time, look for > 1ms entries;
+      (3) `perf sched latency`: per-task scheduling latency percentiles;
+      (4) CFS vs EEVDF comparison: EEVDF changes the distribution of scheduler
+      delays — this is how you measure it; (5) overhead: perf sched record is
+      expensive (all sched events), keep traces short; (6) `perf sched script`
+      for raw event stream.
+
+  # ── Methodology domain ─────────────────────────────────────────────────────
+
+  - id: latency-percentiles-hdr
+    title: "Latency percentiles: interpretation, HDR histogram, and tail behavior"
+    domain: methodology
+    corpus_path: corpus/methodology/latency-percentiles-hdr.md
+    symptom_tags: [p99-tail]
+    source_ids: [tene-coordinated-omission, gregg-site]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any benchmarking scenario
+    notes_for_distiller: |
+      Cover: (1) percentile semantics: p99 = 99% of requests faster, 1% slower;
+      why mean hides tail; (2) HDR histogram: why log-scale buckets matter for
+      high-dynamic-range latency; how to read HDR output; (3) the p99 vs p999
+      distinction for capacity planning; (4) "percentiles don't compose" — summing
+      p99s across services overestimates; (5) latency heatmaps: 2D view of latency
+      distribution over time; detecting bimodal distributions; (6) reporting guidance:
+      always state percentile, sample size, and load rate alongside the number.
+
+  - id: open-vs-closed-loop-load
+    title: "Open vs closed-loop load generators: impact on latency measurement"
+    domain: methodology
+    corpus_path: corpus/methodology/open-vs-closed-loop-load.md
+    symptom_tags: [p99-tail, low-cpu-low-throughput]
+    source_ids: [tene-coordinated-omission, gregg-site]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any benchmarked service
+    notes_for_distiller: |
+      This pairs with coordinated-omission (already exists). Cover the distinction:
+      closed-loop (wait for response, then send) vs open-loop (send at fixed rate).
+      Why open-loop at rates near saturation diverges. Practical tool classification:
+      wrk (closed-loop), wrk2 (open-loop), fio rate mode (open-loop), netperf (closed
+      for RR, open for stream). When each is appropriate. Cross-reference coordinated-
+      omission unit.
+
+  - id: queueing-theory-basics
+    title: "Queueing theory basics: utilization-latency curves, Little's Law, M/M/1"
+    domain: methodology
+    corpus_path: corpus/methodology/queueing-theory-basics.md
+    symptom_tags: [p99-tail, low-cpu-low-throughput, run-queue-long]
+    source_ids: [brooker-blog, jain-art-of-perf]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) M/M/1 response time formula: R = S / (1 - U); why latency goes
+      nonlinear above ~70% utilization; (2) Little's Law: N = X × R; using it to
+      sanity-check measurements; (3) practical implications: why 80% CPU utilization
+      means 5× the latency at 20%; (4) the utilization cliff: what "approaching
+      saturation" looks like in perf data; (5) Brooker's blog examples of queueing
+      in real systems; (6) limitations: M/M/1 assumes exponential service times —
+      real systems are much worse.
+
+  - id: hypothesis-driven-investigation
+    title: "Hypothesis-driven performance investigation: the drill-down loop"
+    domain: methodology
+    corpus_path: corpus/methodology/hypothesis-driven-investigation.md
+    symptom_tags: [high-sys-cpu, p99-tail, throughput-collapse]
+    source_ids: [gregg-site, gregg-sysperf-book]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Cover: (1) the investigation loop: observe symptoms → form hypotheses →
+      select discriminating measurements → confirm/eliminate → explain mechanism;
+      (2) why jumping to "it's the network" or "it's the scheduler" without
+      data is wrong; (3) USE method as structured checklist; (4) the "what changed?"
+      question — narrow scope before broad measurement; (5) Gregg's "60-second
+      analysis" as a canonical first-touch; (6) documenting what you eliminated
+      (negative evidence) — as important as what you found.
+
+  # ── Hardware domain ────────────────────────────────────────────────────────
+
+  - id: numa-remote-memory
+    title: "NUMA topology: remote memory latency, bandwidth, and placement"
+    domain: hardware
+    corpus_path: corpus/hardware/numa-remote-memory.md
+    symptom_tags: [numa-remote, p99-tail, low-ipc]
+    source_ids: [drepper-memory, gregg-sysperf-book, rhel-tuning-guides]
+    applicability:
+      kernel: any
+      hardware: multi-socket x86_64 (2+ NUMA nodes)
+      software: any
+    notes_for_distiller: |
+      Cover: (1) NUMA topology discovery: `numactl --hardware`, `numactl --show`,
+      lscpu NUMA nodes; (2) latency numbers: local DRAM ~80ns, remote ~140-180ns,
+      varies by platform; (3) bandwidth asymmetry: remote bandwidth 30-50% lower
+      on typical 2-socket; (4) detection: `numastat -p <pid>` for per-process NUMA
+      miss rate; `sar -B` for pgmigrate (kernel auto-migration); (5) placement tools:
+      `numactl --membind`, `--cpunodebind`, `--preferred`; (6) NUMA interleave for
+      memory-bandwidth-bound workloads that access data uniformly.
+
+  - id: false-sharing-coherence
+    title: "Cache false sharing: detection, patterns, and fixes"
+    domain: hardware
+    corpus_path: corpus/hardware/false-sharing-coherence.md
+    symptom_tags: [false-sharing, low-ipc, high-sys-cpu]
+    source_ids: [drepper-memory, easyperf-book]
+    applicability:
+      kernel: any
+      hardware: multi-core x86_64 (any cache-coherent system)
+      software: multi-threaded applications
+    notes_for_distiller: |
+      Cover: (1) cache line size (typically 64 bytes); false sharing definition;
+      MESI/MOESI protocol cost for modified-state snoops; (2) detection: perf c2c
+      (see perf-c2c-false-sharing unit); (3) common patterns: counters in arrays,
+      struct fields written by different threads; (4) fixes: padding
+      (__cacheline_aligned, alignas(64)), struct reorganization, thread-local
+      accumulators + periodic merge; (5) true sharing vs false sharing distinction;
+      (6) when false sharing is acceptable: write-once shared read-heavy (fine).
+
+  - id: memory-bandwidth-llc
+    title: "Memory bandwidth and LLC saturation: detection and roofline"
+    domain: hardware
+    corpus_path: corpus/hardware/memory-bandwidth-llc.md
+    symptom_tags: [low-ipc, backend-bound, memory-pressure]
+    source_ids: [easyperf-book, gregg-sysperf-book]
+    applicability:
+      kernel: any
+      hardware: x86_64; varies significantly by platform (DDR4 vs DDR5, channel count)
+      software: memory-bandwidth-bound workloads
+    notes_for_distiller: |
+      Cover: (1) LLC miss → DRAM path: latency ~200+ cycles, bandwidth limited by
+      channels; (2) measuring LLC miss rate: `perf stat -e LLC-load-misses,LLC-loads`;
+      (3) DRAM bandwidth: `perf stat -e uncore_imc*/cas_count_read/,uncore_imc*/cas_count_write/`
+      or Intel MLC / stream benchmark; (4) roofline model: FLOP/s vs bytes/s limits;
+      (5) DDR4 vs DDR5 bandwidth differences (RHEL9 era hardware vs RHEL10 era);
+      (6) NUMA bandwidth asymmetry (see numa-remote-memory unit).
+
+  - id: tlb-pressure-hugepages
+    title: "TLB pressure and hugepages: when to use 2M pages for performance"
+    domain: hardware
+    corpus_path: corpus/hardware/tlb-pressure-hugepages.md
+    symptom_tags: [low-ipc, backend-bound]
+    source_ids: [easyperf-book, kernel-docs]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/mm/hugetlbpage.rst]
+    applicability:
+      kernel: any
+      hardware: x86_64 (48-entry L1 DTLB, 1536-entry L2 TLB typical)
+      software: workloads with large working sets (>1-2 GB)
+    notes_for_distiller: |
+      Cover: (1) TLB mechanics: L1 DTLB 48 entries × 4K = 192KB covered; 2M pages
+      → same 48 entries cover 96MB; (2) measuring TLB pressure: `perf stat -e
+      dTLB-load-misses,dTLB-loads`; (3) when hugepages help: large working set,
+      random access pattern; when they don't: small working set, streaming;
+      (4) explicit hugepages: /proc/sys/vm/nr_hugepages, hugetlbfs, mmap MAP_HUGETLB;
+      (5) THP vs explicit hugepages: THP is opportunistic, explicit is guaranteed;
+      (6) RHEL hugepage configuration: default_hugepagesz, hugepages= kernel params.
+
+  - id: cpu-frequency-turbo
+    title: "CPU frequency, turbo boost, C-states, and AVX frequency licensing"
+    domain: hardware
+    corpus_path: corpus/hardware/cpu-frequency-turbo.md
+    symptom_tags: [throughput-collapse, low-ipc]
+    source_ids: [gregg-sysperf-book, kernel-docs, easyperf-book]
+    applicability:
+      kernel: any
+      hardware: x86_64 Intel (AVX licensing specific to Intel); AMD similar for turbo
+      software: compute-heavy workloads, AVX/AVX-512 users
+    notes_for_distiller: |
+      Cover: (1) turbostat as the primary tool: `turbostat --quiet --show
+      Busy,Bzy_MHz,IRQ,CPU%c1,CPU%c6` — what each column means; (2) P-states:
+      performance vs powersave governor; (3) Intel AVX frequency licensing: running
+      AVX-256 or AVX-512 code drops all-core turbo by 200-600 MHz — how to detect
+      (frequency drop after workload starts); (4) C-state latency: C6 exit latency
+      ~100-200µs — relevant for latency-sensitive workloads; (5) `cpupower frequency-info`;
+      (6) RHEL default governor in RHEL9 vs RHEL10 performance profiles.
+
+  - id: thermal-throttling
+    title: "Thermal throttling: detection, signatures, and TDP-limited performance"
+    domain: hardware
+    corpus_path: corpus/hardware/thermal-throttling.md
+    symptom_tags: [throughput-collapse]
+    source_ids: [gregg-sysperf-book]
+    applicability:
+      kernel: any
+      hardware: x86_64; laptops, dense rack servers, accelerators (GPU)
+      software: sustained compute-heavy workloads
+    notes_for_distiller: |
+      Cover: (1) thermal throttling signature: throughput drops after steady-state
+      minutes of full load; frequency drops in turbostat; (2) detection: turbostat
+      frequency column vs Bzy_MHz; `dmesg | grep thermal`; RAPL power consumption
+      via `turbostat --show PkgWatt,CorWatt`; (3) TDP vs power limit: P1 (sustained)
+      vs P2 (burst); (4) GPU thermal: `nvidia-smi dmon -s p` clock field; (5)
+      distinguishing thermal from other throughput drops: check if frequency is
+      dropping — if not, thermal is not the cause.
+
+  # ── GPU/ML domain ─────────────────────────────────────────────────────────
+
+  - id: vllm-kv-cache-paged-attention
+    title: "vLLM paged attention and KV cache: mechanics, capacity, and preemption"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/vllm-kv-cache-paged-attention.md
+    symptom_tags: [kv-cache-pressure, tpot-high, gpu-oom]
+    source_ids: [vllm, pagedattention-paper]
+    source_paths:
+      vllm: [docs/design/v1/, docs/design/kernel/paged_attention.md]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA GPU with >=16GB VRAM recommended; Ampere+ for BF16"
+      software: "vLLM >=0.4"
+    notes_for_distiller: |
+      Cover: (1) paged attention: KV cache in fixed-size blocks (pages), no
+      fragmentation waste; (2) block size tradeoff: larger blocks → better memory
+      utilization, smaller → finer-grained sharing; (3) KV cache capacity = (GPU
+      VRAM - model weights - activations) / kv_bytes_per_token; (4) preemption:
+      when new requests exceed cache → swap existing sequences to CPU or recompute;
+      detection: `vllm_num_preemptions_total` metric; (5) prefix caching: how
+      blocks are shared across requests with common prefixes; (6) cache hit rate
+      metric and when it matters.
+
+  - id: vllm-continuous-batching
+    title: "vLLM continuous batching: prefill vs decode phases, TTFT/TPOT"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/vllm-continuous-batching.md
+    symptom_tags: [ttft-high, tpot-high, gpu-underutilized]
+    source_ids: [vllm]
+    source_paths:
+      vllm: [docs/design/v1/arch_overview.rst, docs/serving/]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA GPU; Ampere+ for performance"
+      software: "vLLM >=0.4"
+    notes_for_distiller: |
+      Cover: (1) prefill phase: process entire prompt in one forward pass, compute-bound,
+      batch all new request prompts together; (2) decode phase: one token per step,
+      memory-bandwidth-bound, coalesces many requests; (3) continuous batching: new
+      requests join mid-flight, not waiting for batch to complete; (4) TTFT = time from
+      request arrival to first token = prefill latency + queue wait; (5) TPOT = per-
+      token decode time = f(batch_size, model_size, HBM bandwidth); (6) scheduler
+      modes and their TTFT/TPOT tradeoffs; (7) key metrics: `vllm_request_queue_size`,
+      `vllm_gpu_cache_usage_perc`.
+
+  - id: vllm-prefix-cache
+    title: "vLLM prefix caching: hit rate, RadixAttention, and when it helps"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/vllm-prefix-cache.md
+    symptom_tags: [ttft-high, kv-cache-pressure]
+    source_ids: [vllm]
+    source_paths:
+      vllm: [docs/automatic_prefix_caching.rst]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA GPU"
+      software: "vLLM >=0.4 (basic); >=0.6 for RadixAttention-style"
+      software_note: "SGLang RadixAttention is the reference implementation"
+    notes_for_distiller: |
+      Cover: (1) what prefix caching saves: recomputing KV for shared system prompts
+      or multi-turn chat history; (2) hit rate metric: `vllm_cpu_prefix_cache_hit_rate`,
+      `vllm_gpu_prefix_cache_hit_rate`; (3) when prefix caching helps most: shared
+      system prompts > 1k tokens, multi-turn, RAG with shared context; (4) when it
+      doesn't: diverse prompts, short contexts; (5) memory tradeoff: cached blocks
+      compete with decode batch KV; (6) enabling/disabling: `--enable-prefix-caching`
+      flag.
+
+  - id: vllm-chunked-prefill
+    title: "vLLM chunked prefill: trading TTFT variance for TPOT smoothness"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/vllm-chunked-prefill.md
+    symptom_tags: [ttft-high, tpot-high]
+    source_ids: [vllm]
+    source_paths:
+      vllm: [docs/chunked_prefill.rst]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA GPU"
+      software: "vLLM >=0.3"
+    notes_for_distiller: |
+      Cover: (1) the TTFT/TPOT tradeoff: long prefills block decode batches → TPOT
+      spikes for concurrent users; (2) chunked prefill splits long prompts across
+      multiple steps, interleaved with decode; (3) chunk_size tuning: larger chunks
+      → lower TTFT but more TPOT disruption; (4) when it helps: mixed workload with
+      long-prompt and short-prompt requests; (5) `--enable-chunked-prefill` and
+      `--max-num-batched-tokens`; (6) relationship to max_num_seqs scheduler setting.
+
+  - id: nccl-topology-collective
+    title: "NCCL topology, collective algorithms, and multi-GPU scaling"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/nccl-topology-collective.md
+    symptom_tags: [collective-slow, pcie-bound]
+    source_ids: [nccl-docs]
+    source_paths:
+      nccl-docs: [README.md, doc/]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA multi-GPU; NVLink (same node) vs PCIe (cross-node or non-NVLink)"
+      software: "NCCL >=2.x; PyTorch DistributedDataParallel, DeepSpeed"
+    notes_for_distiller: |
+      Cover: (1) topology detection: `nvidia-smi topo -m` output interpretation —
+      NVL (NVLink), PXB (PCIe cross), PHB (host bridge), SYS (cross-socket);
+      (2) ring vs tree algorithms: ring is BW-optimal for large messages, tree for
+      latency-sensitive small messages; NCCL selects automatically; (3) NVLink
+      bandwidth: A100 SXM = 600 GB/s bidirectional; PCIe Gen4 x16 = 64 GB/s;
+      (4) NCCL_DEBUG=INFO for topology dump and algorithm selection log; (5) cross-
+      host-bridge penalty: all-reduce crossing CPU interconnect is 10-100× slower;
+      (6) nccl-tests all_reduce_perf as baseline: bus bandwidth vs theoretical max.
+
+  - id: gpu-occupancy-utilization
+    title: "GPU occupancy, SM utilization, and the GPU utilization number trap"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/gpu-occupancy-utilization.md
+    symptom_tags: [gpu-underutilized]
+    source_ids: [cuda-best-practices, nsight-docs]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA GPU; specifics vary by arch (Volta/Ampere/Hopper/Blackwell)"
+      software: CUDA, PyTorch, vLLM
+    notes_for_distiller: |
+      Cover: (1) nvidia-smi `util.gpu` is % of time at least one kernel was running —
+      it's a poor proxy for efficiency; (2) SM occupancy: warps resident / max warps;
+      low occupancy → latency not hidden; (3) Nsight Compute SM throughput metric as
+      better signal; (4) roofline model for GPU: compute-bound vs memory-bandwidth-bound;
+      (5) decode is memory-bandwidth-bound by design — "low compute utilization" in
+      decode is expected; (6) prefill is compute-bound — low utilization during prefill
+      is a real problem; (7) `nvidia-smi dmon -s u` for polling-rate GPU stats.
+
+  - id: gpu-pcie-host-device
+    title: "GPU host-device transfers: pinned memory, PCIe bottlenecks, overlap"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/gpu-pcie-host-device.md
+    symptom_tags: [pcie-bound, gpu-underutilized]
+    source_ids: [cuda-best-practices, pytorch-perf]
+    source_paths:
+      pytorch-perf: [docs/source/notes/cuda.rst]
+    applicability:
+      kernel: any
+      hardware: "NVIDIA GPU; PCIe Gen4 x16 = 64 GB/s; NVLink for peer-to-peer"
+      software: CUDA, PyTorch
+    notes_for_distiller: |
+      Cover: (1) pageable vs pinned (page-locked) memory: DMA requires pinned; pageable
+      adds a CPU memcpy staging step; (2) `cudaMemcpy` blocking vs `cudaMemcpyAsync` +
+      streams for overlap; (3) measuring transfer bandwidth: bandwidth test utility;
+      expected vs actual PCIe bandwidth; (4) Nsight Systems timeline: H2D/D2H transfer
+      duration and gaps between GPU kernels; (5) P2P (peer-to-peer): NVLink vs PCIe
+      peer access; `nvidia-smi topo --p2p r` readable bandwidth; (6) when host-device
+      is not the bottleneck: weight loading is once; KV cache stays on GPU.
+
+  - id: tokenization-cpu-bottleneck
+    title: "Tokenization CPU bottleneck in LLM serving: detection and mitigation"
+    domain: gpu-ml
+    corpus_path: corpus/gpu-ml/tokenization-cpu-bottleneck.md
+    symptom_tags: [gpu-underutilized, ttft-high]
+    source_ids: [vllm, pytorch-perf]
+    applicability:
+      kernel: any
+      hardware: "any server CPU; GPU idle during tokenization"
+      software: "vLLM >=0.4, HuggingFace tokenizers, any LLM serving stack"
+    notes_for_distiller: |
+      Cover: (1) tokenization is CPU-bound: BPE/wordpiece runs on CPU before GPU sees
+      data; (2) detection: Nsight Systems shows gaps before first GPU kernel; CPU profile
+      shows tokenizer threads hot; (3) HuggingFace fast tokenizers (Rust): much faster
+      than Python; (4) async tokenization: pipeline tokenization for next request while
+      GPU processes current; (5) batch tokenization: throughput better than per-request;
+      (6) when this matters: short prefill, high request rate, CPU-constrained host.
+
+  # ── Distributed domain ─────────────────────────────────────────────────────
+
+  - id: tcp-incast
+    title: "TCP incast: many-to-one collapse, rmem/wmem tuning"
+    domain: distributed
+    corpus_path: corpus/distributed/tcp-incast.md
+    symptom_tags: [packet-drops, retransmits, p99-tail]
+    source_ids: [gregg-sysperf-book, kernel-docs]
+    source_paths:
+      kernel-docs: [Documentation/networking/]
+    applicability:
+      kernel: any
+      hardware: any data center NIC
+      software: distributed systems with fan-in patterns (MapReduce, Ceph, k8s)
+    notes_for_distiller: |
+      Cover: (1) TCP incast: many servers respond simultaneously to one receiver →
+      switch buffer overflow → drops → RTO (200ms+) → throughput collapse;
+      (2) detection: `ss -ti` retransmit counters, `nstat` TCPRetransFail; switch
+      microbursts via ECMP + buffer stats; (3) socket buffer tuning: `net.core.rmem_max`,
+      `net.ipv4.tcp_rmem`; (4) TCP small queues (TSQ): limits in-flight per socket;
+      (5) DCTCP for datacenter: `net.ipv4.tcp_congestion_control=dctcp`; (6) NIC
+      ring buffer: `ethtool -G` rx/tx ring size — first line of defense against drops.
+
+  - id: qdisc-ring-drops
+    title: "Network drops: ring buffer overflow, qdisc drops, and diagnosis"
+    domain: distributed
+    corpus_path: corpus/distributed/qdisc-ring-drops.md
+    symptom_tags: [packet-drops, retransmits, softirq-saturation]
+    source_ids: [kernel-docs, bcc]
+    source_paths:
+      kernel-docs: [Documentation/networking/]
+    applicability:
+      kernel: any
+      hardware: any NIC
+      software: network-intensive workloads
+    notes_for_distiller: |
+      Cover: (1) drop taxonomy: NIC ring buffer overflow (driver rx_missed_errors),
+      qdisc drops (tc qdisc show), socket buffer drops (ss -s);  (2) measurement:
+      `ethtool -S eth0 | grep -i drop`, `ip -s link`, `netstat -s` UDP recv errors;
+      (3) ring buffer overflow: `ethtool -g` current rx ring size; fix with `ethtool -G
+      rxo rx 4096`; (4) qdisc pfifo_fast vs fq_codel vs noqueue; `tc -s qdisc` stats;
+      (5) `/proc/softirqs` NET_RX counts vs drops correlation; (6) `dropwatch` or
+      bpftrace drop tracing for kernel drop location.
+
+  # ── Cross-domain: RHEL9→RHEL10 comparison units ───────────────────────────
+  # These synthesize multiple sources for the primary review agent use case.
+
+  - id: rhel9-rhel10-kernel-delta
+    title: "RHEL9 vs RHEL10 kernel delta: scheduler, MM, mitigations, default tuning"
+    domain: kernel
+    corpus_path: corpus/kernel/rhel9-rhel10-kernel-delta.md
+    symptom_tags: [high-sys-cpu, low-cpu-low-throughput, p99-tail, memory-pressure]
+    source_ids: [lwn, kernel-docs, tuned, rhel-tuning-guides]
+    applicability:
+      kernel: "RHEL9 (kernel-5.14-based) vs RHEL10 (kernel-6.12-based)"
+      hardware: x86_64
+      software: any
+    notes_for_distiller: |
+      Synthesis unit — distill this AFTER eevdf-vs-cfs, mglru-page-reclaim,
+      thp-transparent-hugepages, tuned-profiles-rhel, and kernel-spectre-mitigations
+      exist. Cover: (1) the key scheduler change: CFS→EEVDF — link to eevdf-vs-cfs;
+      (2) the key MM changes: MGLRU default, THP default change, folio adoption —
+      link to mglru-page-reclaim; (3) spectre mitigation generation: retpoline+IBRS
+      (RHEL9) vs eIBRS dominant (RHEL10 on supported CPUs) — link to kernel-spectre-
+      mitigations; (4) tuned profile differences; (5) cgroup v1→v2 migration impact;
+      (6) a concrete checklist for review agents: when comparing RHEL9 vs RHEL10,
+      check these metrics in this order to attribute differences to specific causes.
+
+  # ── Observability: sysctl/proc reference ──────────────────────────────────
+
+  - id: proc-sysctl-reference
+    title: "Key /proc and sysctl files for performance investigation"
+    domain: observability
+    corpus_path: corpus/observability/proc-sysctl-reference.md
+    symptom_tags: [high-sys-cpu, memory-pressure, packet-drops]
+    source_ids: [kernel-docs, man-pages]
+    source_paths:
+      kernel-docs: [Documentation/admin-guide/sysctl/]
+    applicability:
+      kernel: any
+      hardware: any
+      software: any
+    notes_for_distiller: |
+      Quick-reference unit. Cover: (1) CPU: /proc/stat fields, /proc/schedstat,
+      /proc/sched_debug; (2) memory: /proc/meminfo key fields (Cached, Dirty,
+      Writeback, AnonPages, SwapCached), /proc/vmstat key fields; (3) network:
+      /proc/net/dev, /proc/softirqs, /proc/interrupts; (4) cgroup: /sys/fs/cgroup/
+      hierarchy, per-cgroup cpu.stat, memory.stat, io.stat; (5) performance-relevant
+      sysctls table: vm.dirty_ratio, vm.overcommit, net.core.*, net.ipv4.tcp_*,
+      kernel.sched_*. Organized for investigator use, not exhaustive reference.
+
+# ── Existing units (already in corpus) ─────────────────────────────────────
+# Listed for completeness; do NOT re-distill.
+existing:
+  - id: coordinated-omission
+    corpus_path: corpus/methodology/coordinated-omission.md
+    status: complete
+
+# ── LWN curated URL set (for lwn source in registry) ───────────────────────
+# Update registry/sources.yaml lwn.urls with this list before Phase 1 harvest.
+# All articles are >30 days old; freely accessible in LWN archive.
+lwn_seed_urls:
+  scheduler:
+    - https://lwn.net/Articles/925371/   # EEVDF scheduler for Linux (2023-02)
+    - https://lwn.net/Articles/969349/   # EEVDF in 6.6 update
+    - https://lwn.net/Articles/754153/   # Deadline scheduler review
+    - https://lwn.net/Articles/639543/   # CFS group scheduling changes
+  mm:
+    - https://lwn.net/Articles/851817/   # MGLRU: next steps (2021-07)
+    - https://lwn.net/Articles/881876/   # MGLRU merged (2022-12)
+    - https://lwn.net/Articles/914232/   # MGLRU performance discussion
+    - https://lwn.net/Articles/423584/   # THP introduction
+    - https://lwn.net/Articles/849538/   # Folios (large pages in core mm)
+  networking:
+    - https://lwn.net/Articles/687617/   # NAPI internals
+    - https://lwn.net/Articles/362244/   # softirq budget NET_RX
+  cgroup:
+    - https://lwn.net/Articles/844976/   # Fixing bandwidth throttling (2021-02)
+    - https://lwn.net/Articles/759781/   # PSI (pressure stall info) (2018-10)
+    - https://lwn.net/Articles/775827/   # PSI merged
+  security:
+    - https://lwn.net/Articles/741266/   # Meltdown and Spectre (2018-01)
+    - https://lwn.net/Articles/752408/   # Spectre mitigations deep dive
+    - https://lwn.net/Articles/820086/   # eIBRS and mitigation saga
+    - https://lwn.net/Articles/878826/   # Retbleed overhead
+  futex:
+    - https://lwn.net/Articles/360699/   # Futex internals

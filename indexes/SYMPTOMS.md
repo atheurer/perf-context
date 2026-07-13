@@ -17,7 +17,7 @@ Symptom tag vocabulary (use in unit frontmatter `tags`):
 |---|---|---|---|
 | High sys% CPU, throughput flat | syscall-heavy path; lock contention in kernel; page faults; network stack cost | `perf top -g` kernel side; `pidstat -w`; `perf stat -e context-switches,page-faults` | TBD |
 | CPU not saturated, throughput plateaus with concurrency | userspace lock contention; single contended resource; connection/accept bottleneck; coordinated omission hiding it | off-CPU flame graph; `bpftrace` futex latency; check load generator methodology | TBD |
-| p99 >> p50, p50 healthy | queueing at a burst-sensitive stage; GC/allocator pauses; timer/IRQ interference; NUMA remote hits on a subset | latency heatmap over time; `perf sched timehist`; GC logs; per-CPU breakdown | TBD |
+| p99 >> p50, p50 healthy | queueing at a burst-sensitive stage; GC/allocator pauses; timer/IRQ interference; NUMA remote hits on a subset | latency heatmap over time; `perf sched timehist`; GC logs; per-CPU breakdown | `coordinated-omission` |
 | Low IPC (<~0.5) on busy cores | memory-bound (LLC misses, DRAM bandwidth); false sharing; TLB pressure | TMA level 1 (`perf stat -M tma_...` / toplev); `perf c2c`; `perf stat -e dTLB-load-misses` | TBD |
 | One core pegged in softirq | IRQ steering imbalance; NAPI overload; RPS/RFS misconfig | `mpstat -P ALL`; `/proc/interrupts` deltas; `/proc/softirqs` | TBD |
 | Throughput drops after minutes at steady load | thermal/frequency (AVX or turbo decay); page cache filled → reclaim; JIT deopt; KV cache fills → preemption | `turbostat`; `sar -B`; runtime-specific logs; vLLM preemption counters | TBD |
