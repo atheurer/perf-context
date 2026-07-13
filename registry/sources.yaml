@@ -46,6 +46,31 @@ sources:
     cadence: release
     notes: Verify current license; repo licensing has nuances. Extremely high density for TMA, PMU, uarch tuning.
 
+  - id: abseil-fast
+    name: "abseil.io/fast — Performance Hints (Dean & Ghemawat) + Fast TotW series"
+    domain: [methodology, runtimes]
+    method: git
+    repo: https://github.com/abseil/abseil.github.io
+    paths: [fast/]
+    license: Apache-2.0
+    license_verified: false
+    track: core
+    annex_ok: true
+    priority: 1
+    cadence: quarterly
+    notes: >
+      Verify site-content license in repo (code is Apache-2.0; confirm prose
+      license before track:core is final; fall back to track:digest if
+      all-rights-reserved). Two distinct yields: (1) estimation and
+      back-of-envelope discipline incl. updated latency-numbers table —
+      pairs with router "measure before reading" rule; (2) large catalog of
+      code-level optimization techniques with real before/after changes and
+      benchmark deltas — near-mechanical playbook/technique-digest
+      extraction. Numbered Fast TotW entries (e.g. microbenchmark pitfalls,
+      performance-counter benchmarking) are separate units. Applicability
+      caveat: single-binary tuning, mostly C++; explicitly excludes
+      distributed systems and ML-hardware tuning.
+
   - id: jain-art-of-perf
     name: "The Art of Computer Systems Performance Analysis (Jain) + author slides"
     domain: [methodology]
