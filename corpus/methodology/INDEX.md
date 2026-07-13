@@ -4,3 +4,4 @@
 | id | abstract | tokens | type |
 |---|---|---|---|
 | `coordinated-omission` | A measurement error where a load generator that waits for responses before sending the next request silently drops exactly the samples that occur during slow periods, making reported p99/p999 latency wildly optimistic... | 420 | concept |
+| `hypothesis-driven-investigation` | Effective performance investigation follows a loop: observe symptom, form hypotheses, select a measurement that discriminates between them, interpret result, eliminate or confirm. Skipping straight to "it's the networ... | 440 | concept |

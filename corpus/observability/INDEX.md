@@ -4,3 +4,7 @@
 | id | abstract | tokens | type |
 |---|---|---|---|
 | `mpstat-sar-cpu-breakdown` | `mpstat` and `sar -u` break CPU time into user, sys, softirq, irq, iowait, steal, and idle. Each column answers a different diagnostic question. Misreading iowait (not a disk-speed metric) or softirq (IRQ imbalance, n... | 510 | tool |
+| `off-cpu-analysis` | CPU flame graphs show only on-CPU time — they miss everything a task spends sleeping, blocking on I/O, or waiting for locks. Off-CPU analysis profiles blocked time using BPF tracing of scheduler switches. When a workl... | 490 | tool |
+| `perf-stat-record` | `perf stat` measures hardware performance counters for a workload — cycles, instructions, IPC, cache misses, and context switches — giving a system-wide or per-process profile in seconds. IPC below ~0.5 indicates memo... | 490 | tool |
+| `pidstat-context-switches` | `pidstat -w` shows voluntary and involuntary context switch rates per process. The split between voluntary (task blocked and released CPU) and involuntary (scheduler preempted task) is a direct diagnostic signal: high... | 460 | tool |
+| `use-method` | The USE Method structures performance investigation as a checklist: for every system resource, measure Utilization (% busy), Saturation (queue depth or wait), and Errors. It prevents the common failure mode of fixatin... | 470 | concept |
