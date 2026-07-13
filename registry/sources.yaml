@@ -1,0 +1,682 @@
+# Seed source registry. license fields are initial guesses; harvester must
+# verify (license_verified: true) before track assignment is final.
+# priority: 1 = seed corpus, 2 = second wave, 3 = long tail
+# cadence: once | monthly | quarterly | release (re-harvest on new release)
+# track: core | digest | conservative | pointer (see LICENSE-POLICY.md)
+
+sources:
+
+  # ── Methodology ────────────────────────────────────────────────
+  - id: gregg-site
+    name: brendangregg.com (USE method, off-CPU analysis, flame graphs, one-liners, blog investigations)
+    domain: [methodology, observability]
+    method: fetch
+    crawl_root: https://www.brendangregg.com/
+    crawl_depth: 2
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: quarterly
+    notes: Blog investigation posts also yield playbooks. Books are separate pointer entries.
+
+  - id: gregg-sysperf-book
+    name: "Systems Performance 2e (Gregg) — book"
+    domain: [methodology, observability, kernel]
+    method: pointer
+    url: https://www.brendangregg.com/systems-performance-2nd-edition-book.html
+    license: proprietary
+    track: pointer
+    priority: 1
+    cadence: once
+    notes: Chapter-level pointer map; concept digests written independently.
+
+  - id: easyperf-book
+    name: "Performance Analysis and Tuning on Modern CPUs (Bakhvalov) — open book source"
+    domain: [methodology, hardware, observability]
+    method: git
+    repo: https://github.com/dendibakh/perf-book
+    paths: [chapters/]
+    license: CC-BY-NC-ND-4.0
+    license_verified: false
+    track: conservative
+    annex_ok: true
+    priority: 1
+    cadence: release
+    notes: Verify current license; repo licensing has nuances. Extremely high density for TMA, PMU, uarch tuning.
+
+  - id: jain-art-of-perf
+    name: "The Art of Computer Systems Performance Analysis (Jain) + author slides"
+    domain: [methodology]
+    method: pointer
+    url: https://www.cse.wustl.edu/~jain/books/perfbook.htm
+    license: proprietary
+    track: pointer
+    priority: 2
+    cadence: once
+    notes: Queueing theory, experimental design, benchmarking statistics. Author-posted slides may be fetchable.
+
+  - id: tail-at-scale
+    name: "The Tail at Scale (Dean & Barroso, CACM 2013)"
+    domain: [methodology, distributed]
+    method: pointer
+    url: https://research.google/pubs/the-tail-at-scale/
+    license: ACM
+    track: pointer
+    priority: 1
+    cadence: once
+
+  - id: yasin-tma
+    name: "A Top-Down Method for Performance Analysis and Counters Architecture (Yasin, ISPASS 2014)"
+    domain: [methodology, hardware]
+    method: pointer
+    url: https://doi.org/10.1109/ISPASS.2014.6844459
+    license: IEEE
+    track: pointer
+    priority: 1
+    cadence: once
+
+  - id: mytkowicz-wrong-data
+    name: "Producing Wrong Data Without Doing Anything Obviously Wrong (ASPLOS 2009)"
+    domain: [methodology]
+    method: pointer
+    url: https://doi.org/10.1145/1508244.1508275
+    license: ACM
+    track: pointer
+    priority: 2
+    cadence: once
+    notes: Measurement bias; pair with STABILIZER and "Rigorous Benchmarking in Reasonable Time".
+
+  - id: tene-coordinated-omission
+    name: "Gil Tene — How NOT to Measure Latency (talk) + HdrHistogram docs"
+    domain: [methodology]
+    method: git
+    repo: https://github.com/HdrHistogram/HdrHistogram
+    paths: [README.md]
+    license: BSD-2-Clause/public-domain
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: once
+    notes: Talk transcript to annex; coordinated-omission digest is mandatory seed content.
+
+  # ── Kernel / OS ────────────────────────────────────────────────
+  - id: kernel-docs
+    name: Linux kernel Documentation/ tree
+    domain: [kernel, observability]
+    method: git
+    repo: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+    paths:
+      - Documentation/admin-guide/perf-security.rst
+      - Documentation/admin-guide/mm/
+      - Documentation/admin-guide/cgroup-v2.rst
+      - Documentation/scheduler/
+      - Documentation/trace/
+      - Documentation/networking/
+      - Documentation/block/
+      - Documentation/mm/
+      - tools/perf/Documentation/
+    license: GPL-2.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+    notes: Shallow clone with sparse checkout; record kernel version in applicability.
+
+  - id: man-pages
+    name: Linux man-pages project (syscalls, proc, capabilities)
+    domain: [kernel]
+    method: git
+    repo: https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git
+    paths: [man/man2/, man/man5/proc.5, man/man7/]
+    license: mixed-free
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  - id: lwn
+    name: LWN.net kernel-internals articles (free archive)
+    domain: [kernel]
+    method: fetch
+    urls: []  # curated list built during harvest; seed with EEVDF, io_uring, folios, MGLRU series
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: monthly
+    notes: Only articles past the subscriber window. Best-in-class explainers of scheduler/mm changes.
+
+  - id: tuned
+    name: tuned profiles (codified Red Hat perf-team tuning knowledge)
+    domain: [kernel, methodology]
+    method: git
+    repo: https://github.com/redhat-performance/tuned
+    paths: [profiles/]
+    license: GPL-2.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+    notes: Each profile digest = "what knobs matter for workload class X and why".
+
+  - id: rhel-tuning-guides
+    name: RHEL performance tuning / monitoring guides
+    domain: [kernel, observability]
+    method: fetch
+    crawl_root: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/
+    crawl_depth: 2
+    license: CC-BY-SA-4.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: quarterly
+    notes: Red Hat docs are CC-BY-SA — verify per-document. Filter to perf/tuning/realtime titles.
+
+  # ── Observability tooling ──────────────────────────────────────
+  - id: bcc
+    name: BCC tools + per-tool _example.txt walkthroughs
+    domain: [observability]
+    method: git
+    repo: https://github.com/iovisor/bcc
+    paths: [tools/, docs/]
+    license: Apache-2.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+    notes: Example files are pre-packaged "interpret this output" training data.
+
+  - id: bpftrace
+    name: bpftrace tools + reference guide
+    domain: [observability]
+    method: git
+    repo: https://github.com/bpftrace/bpftrace
+    paths: [tools/, docs/]
+    license: Apache-2.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+
+  - id: flamegraph
+    name: FlameGraph repo (docs + variants)
+    domain: [observability]
+    method: git
+    repo: https://github.com/brendangregg/FlameGraph
+    paths: [README.md, docs/]
+    license: CDDL-1.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: once
+
+  - id: perf-wiki
+    name: perf wiki (perf.wiki.kernel.org tutorial)
+    domain: [observability]
+    method: fetch
+    crawl_root: https://perf.wiki.kernel.org/
+    crawl_depth: 2
+    license: GPL-2.0-docs
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: quarterly
+
+  - id: pcp-docs
+    name: Performance Co-Pilot docs
+    domain: [observability]
+    method: git
+    repo: https://github.com/performancecopilot/pcp
+    paths: [docs/, man/]
+    license: LGPL/GPL
+    license_verified: false
+    track: core
+    priority: 3
+    cadence: release
+
+  - id: sysstat
+    name: sysstat man pages (sar, iostat, pidstat, mpstat)
+    domain: [observability]
+    method: git
+    repo: https://github.com/sysstat/sysstat
+    paths: [man/]
+    license: GPL-2.0
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  - id: likwid
+    name: LIKWID wiki (PMU groups, topology, roofline)
+    domain: [observability, hardware]
+    method: git
+    repo: https://github.com/RRZE-HPC/likwid
+    paths: [doc/]
+    license: GPL-3.0
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  # ── Hardware / microarchitecture ───────────────────────────────
+  - id: agner-fog
+    name: Agner Fog optimization manuals (microarchitecture, instruction tables, C++ optimization)
+    domain: [hardware]
+    method: fetch
+    urls: [https://www.agner.org/optimize/]
+    license: freely-available-copyrighted
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: quarterly
+
+  - id: intel-orm
+    name: Intel 64 and IA-32 Optimization Reference Manual
+    domain: [hardware]
+    method: pointer
+    url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+    license: intel-proprietary
+    track: pointer
+    priority: 1
+    cadence: release
+    notes: Digest only taxonomy-required chapters (memory subsystem, prefetch, TMA event mapping).
+
+  - id: amd-optimization
+    name: AMD SOG (Software Optimization Guides, Zen family) + PPR excerpts
+    domain: [hardware]
+    method: pointer
+    url: https://www.amd.com/en/developer.html
+    license: amd-proprietary
+    track: pointer
+    priority: 2
+    cadence: release
+
+  - id: drepper-memory
+    name: "What Every Programmer Should Know About Memory (Drepper, 2007)"
+    domain: [hardware]
+    method: pointer
+    url: https://people.freedesktop.org/~drepper/cpumemory.pdf
+    license: verify
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: once
+    notes: Mark applicability caveats — DDR2-era numbers, principles still sound.
+
+  - id: uops-info
+    name: uops.info instruction latency/throughput tables
+    domain: [hardware]
+    method: pointer
+    url: https://uops.info/
+    license: verify
+    track: pointer
+    priority: 3
+    cadence: once
+    notes: Data lookup resource; agent should fetch live rather than mirror.
+
+  - id: chipsandcheese
+    name: Chips and Cheese uarch deep dives
+    domain: [hardware]
+    method: fetch
+    urls: []  # curated per-architecture list during harvest
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 2
+    cadence: monthly
+
+  - id: johnnysswlab
+    name: Johnny's Software Lab (practical low-level perf articles)
+    domain: [hardware, runtimes]
+    method: fetch
+    crawl_root: https://johnnysswlab.com/
+    crawl_depth: 2
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 2
+    cadence: quarterly
+
+  # ── Runtimes / compilers ───────────────────────────────────────
+  - id: jvm-tuning
+    name: HotSpot GC tuning guide (Oracle docs) + JEP index for GC/vector
+    domain: [runtimes]
+    method: pointer
+    url: https://docs.oracle.com/en/java/javase/
+    license: oracle-proprietary
+    track: pointer
+    priority: 2
+    cadence: release
+
+  - id: go-runtime
+    name: Go GC guide + runtime/pprof/execution-tracer docs
+    domain: [runtimes]
+    method: git
+    repo: https://github.com/golang/go
+    paths: [doc/gc-guide.md, doc/diagnostics.md]
+    license: BSD-3-Clause
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  - id: bolt-pgo
+    name: LLVM BOLT docs + PGO/LTO documentation
+    domain: [runtimes]
+    method: git
+    repo: https://github.com/llvm/llvm-project
+    paths: [bolt/docs/]
+    license: Apache-2.0-with-LLVM-exception
+    license_verified: false
+    track: core
+    priority: 3
+    cadence: release
+
+  - id: cpython-perf
+    name: CPython performance docs (GIL/free-threading, profiling)
+    domain: [runtimes]
+    method: fetch
+    urls: [https://docs.python.org/3/howto/perf_profiling.html, https://docs.python.org/3/howto/free-threading-python.html]
+    license: PSF
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  # ── Distributed / scale ────────────────────────────────────────
+  - id: sre-books
+    name: Google SRE Book + SRE Workbook (capacity, load balancing, overload chapters)
+    domain: [distributed, methodology]
+    method: pointer
+    url: https://sre.google/books/
+    license: CC-BY-NC-ND-4.0
+    license_verified: false
+    track: conservative
+    priority: 1
+    cadence: once
+
+  - id: brooker-blog
+    name: Marc Brooker blog (queueing, retries, backoff, metastable failure)
+    domain: [distributed, methodology]
+    method: fetch
+    crawl_root: https://brooker.co.za/blog/
+    crawl_depth: 1
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: quarterly
+
+  - id: danluu
+    name: Dan Luu essays (latency, measurement culture, hardware trends)
+    domain: [methodology, distributed]
+    method: fetch
+    crawl_root: https://danluu.com/
+    crawl_depth: 1
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 2
+    cadence: quarterly
+
+  - id: acm-queue
+    name: ACM Queue performance articles
+    domain: [distributed, methodology]
+    method: pointer
+    url: https://queue.acm.org/
+    license: ACM
+    track: pointer
+    priority: 3
+    cadence: quarterly
+
+  - id: awesome-scalability
+    name: awesome-scalability (registry expansion source, not content)
+    domain: [distributed]
+    method: git
+    repo: https://github.com/binhnguyennus/awesome-scalability
+    paths: [README.md]
+    license: MIT
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: quarterly
+    notes: Mine for new registry entries, especially engineering-blog case studies.
+
+  # ── Case-study / playbook feeds ────────────────────────────────
+  - id: netflix-techblog
+    name: Netflix TechBlog performance investigations
+    domain: [methodology, kernel, distributed]
+    method: fetch
+    urls: []  # curated: perf tag
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: monthly
+    notes: Primary playbook feed.
+
+  - id: cloudflare-blog
+    name: Cloudflare blog (kernel networking, eBPF, "how we debugged" posts)
+    domain: [kernel, methodology]
+    method: fetch
+    urls: []
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: monthly
+
+  - id: meta-engineering
+    name: Meta engineering blog (infra perf, BOLT, CacheLib, AI infra)
+    domain: [distributed, gpu-ml, runtimes]
+    method: fetch
+    urls: []
+    license: all-rights-reserved
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 2
+    cadence: monthly
+
+  - id: p99conf
+    name: P99 CONF talk transcripts
+    domain: [methodology, distributed, kernel]
+    method: fetch
+    urls: []
+    license: transcript-auto
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 2
+    cadence: quarterly
+
+  - id: lpc-kernelrecipes
+    name: Linux Plumbers + Kernel Recipes talk materials
+    domain: [kernel]
+    method: fetch
+    urls: []
+    license: mixed
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 2
+    cadence: quarterly
+
+  # ── GPU / ML inference ─────────────────────────────────────────
+  - id: cuda-best-practices
+    name: CUDA C++ Best Practices Guide + Programming Guide (selected chapters)
+    domain: [gpu-ml]
+    method: pointer
+    url: https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/
+    license: nvidia-proprietary
+    track: pointer
+    priority: 1
+    cadence: release
+    notes: Digest occupancy, coalescing, streams/overlap, unified memory chapters only.
+
+  - id: nsight-docs
+    name: Nsight Systems / Nsight Compute user guides (metric interpretation)
+    domain: [gpu-ml, observability]
+    method: pointer
+    url: https://docs.nvidia.com/nsight-compute/
+    license: nvidia-proprietary
+    track: pointer
+    priority: 1
+    cadence: release
+
+  - id: nccl-docs
+    name: NCCL docs (topology, rings/trees, env tuning) + nccl-tests
+    domain: [gpu-ml]
+    method: git
+    repo: https://github.com/NVIDIA/nccl-tests
+    paths: [README.md, doc/]
+    license: BSD-3-Clause
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+
+  - id: vllm
+    name: vLLM docs + design docs (paged attention, scheduling, prefix caching, spec decode)
+    domain: [gpu-ml]
+    method: git
+    repo: https://github.com/vllm-project/vllm
+    paths: [docs/]
+    license: Apache-2.0
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+
+  - id: sglang
+    name: SGLang docs (RadixAttention, scheduling)
+    domain: [gpu-ml]
+    method: git
+    repo: https://github.com/sgl-project/sglang
+    paths: [docs/]
+    license: Apache-2.0
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  - id: pagedattention-paper
+    name: "Efficient Memory Management for LLM Serving with PagedAttention (arXiv 2309.06180)"
+    domain: [gpu-ml]
+    method: fetch
+    urls: [https://arxiv.org/abs/2309.06180]
+    license: arXiv-nonexclusive
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: once
+    notes: Seed a small arXiv set alongside — FlashAttention 1/2/3, speculative decoding, continuous batching (Orca), quantization (GPTQ/AWQ), MoE serving.
+
+  - id: pytorch-perf
+    name: PyTorch performance tuning guide + profiler docs + torch.compile docs
+    domain: [gpu-ml]
+    method: git
+    repo: https://github.com/pytorch/pytorch
+    paths: [docs/source/notes/cuda.rst, docs/source/profiler.rst]
+    license: BSD-3-Clause
+    license_verified: false
+    track: core
+    priority: 1
+    cadence: release
+
+  - id: triton-lang
+    name: OpenAI Triton tutorials (kernel authoring, autotuning)
+    domain: [gpu-ml]
+    method: git
+    repo: https://github.com/triton-lang/triton
+    paths: [python/tutorials/]
+    license: MIT
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  - id: hf-ultrascale
+    name: HuggingFace Ultra-Scale Playbook (parallelism, comms/compute overlap)
+    domain: [gpu-ml, distributed]
+    method: fetch
+    urls: [https://huggingface.co/spaces/nanotron/ultrascale-playbook]
+    license: verify
+    license_verified: false
+    track: digest
+    annex_ok: true
+    priority: 1
+    cadence: quarterly
+
+  - id: rocm-docs
+    name: ROCm performance guidelines + rocprof docs
+    domain: [gpu-ml]
+    method: fetch
+    crawl_root: https://rocm.docs.amd.com/
+    crawl_depth: 2
+    license: MIT/CC
+    license_verified: false
+    track: core
+    priority: 3
+    cadence: release
+
+  - id: mlperf
+    name: MLPerf Inference rules + reference implementations
+    domain: [gpu-ml, methodology]
+    method: git
+    repo: https://github.com/mlcommons/inference
+    paths: [README.md, docs/]
+    license: Apache-2.0
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  # ── Benchmarking / load tools ──────────────────────────────────
+  - id: fio
+    name: fio documentation
+    domain: [observability, methodology]
+    method: git
+    repo: https://github.com/axboe/fio
+    paths: [HOWTO.rst, doc/]
+    license: GPL-2.0
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release
+
+  - id: netperf-iperf
+    name: netperf + iperf3 docs
+    domain: [observability]
+    method: git
+    repo: https://github.com/esnet/iperf
+    paths: [docs/]
+    license: BSD-3-Clause
+    license_verified: false
+    track: core
+    priority: 3
+    cadence: release
+
+  - id: stress-ng
+    name: stress-ng (stressor catalog as pathology-injection library for Phase 4)
+    domain: [methodology]
+    method: git
+    repo: https://github.com/ColinIanKing/stress-ng
+    paths: [README.md]
+    license: GPL-2.0
+    license_verified: false
+    track: core
+    priority: 2
+    cadence: release

@@ -1,0 +1,34 @@
+# Schema for the YAML frontmatter of every corpus unit (corpus/**/*.md).
+# All fields required unless marked optional.
+
+id: string            # unique, kebab-case, e.g. "offcpu-analysis" or "vllm-preemption-playbook"
+title: string
+type: enum            # concept | tool | reference | playbook | case_study | pointer
+domain: enum          # methodology | observability | hardware | kernel | runtimes | distributed | gpu-ml
+tags: [string]        # freeform, lowercase; used by grep-based retrieval
+                      # include symptom tags where relevant, e.g. "high-sys-cpu", "p99-tail"
+
+source_id: string     # registry/sources.yaml id
+source_url: string
+source_license: string
+license_verified: bool
+track: enum           # core | digest | conservative | pointer
+
+applicability:        # optional but strongly encouraged
+  kernel: string      # e.g. ">=6.6 (EEVDF)" or "any"
+  hardware: string    # e.g. "x86_64", "NVIDIA Ampere+", "any"
+  software: string    # e.g. "vLLM >=0.6", "any"
+
+tokens:
+  abstract: int       # measured token count of the abstract section
+  digest: int         # measured token count of the digest section
+
+quality: enum         # seed | reviewed | eval-validated
+                      # seed = distilled, passed critic
+                      # reviewed = human spot-checked
+                      # eval-validated = credited in a successful Phase-4 run
+
+created: date
+last_verified: date   # last time checked against source / current reality
+supersedes: string    # optional, id of an older unit this replaces
+annex_raw: string     # optional, path in annex repo to the raw source copy
