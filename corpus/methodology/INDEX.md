@@ -5,4 +5,5 @@
 |---|---|---|---|
 | `coordinated-omission` | A measurement error where a load generator that waits for responses before sending the next request silently drops exactly the samples that occur during slow periods, making reported p99/p999 latency wildly optimistic... | 420 | concept |
 | `hypothesis-driven-investigation` | Effective performance investigation follows a loop: observe symptom, form hypotheses, select a measurement that discriminates between them, interpret result, eliminate or confirm. Skipping straight to "it's the networ... | 440 | concept |
+| `latency-percentiles-hdr` | p99 latency means 99% of requests completed faster; 1% were slower. Means and averages hide tail behavior that users experience. HDR Histogram captures latency across a high dynamic range without losing precision at t... | 430 | concept |
 | `queueing-theory-basics` | Queueing theory explains why latency grows nonlinearly as utilization approaches 100%, why bursts matter more than averages, and why "add more capacity" often does not fix tail latency. The M/M/1 model is the analyst'... | 450 | concept |
